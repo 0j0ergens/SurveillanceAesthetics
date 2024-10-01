@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>three.js webgl - materials - matcap</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="main.css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        #dropArea {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+    </style>
+</head>
+
+<body>
+<div id="info">
+    <p style="color:orangered; font-size:100px;"> HOMUNCUGRAM</p>
+</div>
+
+<div id="dropArea">
+    <p style="color:orangered;font-size:100px;font-weight: bold;font-style: italic;"> DROP DATA </p>
+    </div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "build/three.module.js",
+            "three/addons/": "./jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+
+    let mesh, renderer, scene, camera;
+
+    const API = {
+        color: 0xffffff, // sRGB
+        exposure: 1.5
+    };
+
+    init();
+
+    function init() {
+        // renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = API.exposure;
+
+        scene = new THREE.Scene();
+
+        camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 100);
+        camera.position.set(0, 0, 13);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.addEventListener('change', render);
+        controls.enableZoom = false;
+        controls.enablePan = false;
+
+        const manager = new THREE.LoadingManager(render);
+        const loaderEXR = new EXRLoader(manager);
+        const matcap = loaderEXR.load('040full.exr');
+        const loader = new THREE.TextureLoader(manager);
+        const normalmap = loader.load('Infinite-Level_02_Tangent_SmoothUV.jpg');
+
+        new GLTFLoader(manager).load('LeePerrySmith.glb', function (gltf) {
+            mesh = gltf.scene.children[0];
+            mesh.position.y = -0.25;
+            const start_size = 1; 
+            mesh.scale.set(start_size, start_size, start_size); 
+
+            mesh.material = new THREE.MeshMatcapMaterial({
+                color: new THREE.Color().setHex(API.color),
+                matcap: matcap,
+                normalMap: normalmap
+            });
+
+            scene.add(mesh);
+        });
+        initDragAndDrop();
+
+        window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        render();
+    }
+
+    function render() {
+        renderer.render(scene, camera);
+    }
+
+    function updateMatcap(texture) {
+        if (mesh.material.matcap) {
+            mesh.material.matcap.dispose();
+        }
+        mesh.material.matcap = texture;
+        texture.needsUpdate = true;
+        mesh.material.needsUpdate = true;
+        render();
+    }
+
+    function loadFile(file) {
+        const filename = file.name;
+        const extension = filename.split('.').pop().toLowerCase();
+
+        if (extension === 'jpg' || extension === 'png') {
+            const reader = new FileReader();
+            reader.addEventListener('load', function (event) {
+                handleJPG(event); // Handle image files (JPG, PNG)
+            });
+            reader.readAsDataURL(file);
+        } 
+    }
+
+    function handleJPG(event) {
+        const img = new Image();
+        img.onload = function () {
+            const texture = new THREE.Texture(img);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.needsUpdate = true;
+            updateMatcap(texture); // Apply texture to the 3D model
+        };
+        img.src = event.target.result;
+    }
+
+    function adjustHeadSize(followersCount, postCount) {
+        const scaleFactor =  1 + (followersCount + 200) / 500; //follower scale
+        const scaleFactor2 = (postCount + 50) / 100 + .5;  // post scale
+        mesh.scale.set(scaleFactor, scaleFactor, scaleFactor2); 
+    }
+
+    function loadFollowersFile(file) {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(event.target.result, 'text/html');
+            const followers = doc.querySelectorAll('a[href*="instagram.com"]');
+            const followersCount = followers.length;
+            const postCountElement = doc.querySelector('.post-count-class');
+            const postCount = postCountElement ? parseInt(postCountElement.textContent, 10) : 0; 
+
+            console.log('Followers Count:', followersCount);
+            console.log('Post Count:', postCount);
+
+            adjustHeadSize(followersCount, postCount);
+        };
+        reader.readAsText(file);
+    }
+
+    function processMediaFolder(mediaFolder) {
+        mediaFolder.createReader().readEntries((mediaItems) => {
+            for (const mediaItem of mediaItems) {
+                if (mediaItem.isDirectory && mediaItem.name === 'profile') {
+                    mediaItem.createReader().readEntries((profileItems) => {
+                        const subfolders = profileItems.filter((entry) => entry.isDirectory);
+
+                        const latestFolder = subfolders.reduce((latest, current) => {
+                            return current.name > latest.name ? current : latest;
+                        }, subfolders[0]);
+
+                        if (latestFolder) {
+                            latestFolder.createReader().readEntries((profileImages) => {
+                                for (const profileImage of profileImages) {
+                                    if (profileImage.isFile && !profileImage.name.startsWith('.')) {
+                                        profileImage.file((file) => {
+                                            loadFile(file);
+                                        });
+                                        break;
+                                    }
+                                }
+                            });
+                        } else {
+                            console.error('No subfolders found inside profile.');
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    async function processInstagramFolder(folder) {
+        const reader = folder.createReader();
+
+        reader.readEntries((items) => {
+            for (const item of items) {
+                if (item.isDirectory && item.name === 'media') {
+                    processMediaFolder(item);
+                } else if (item.isDirectory && item.name === 'connections') {
+                    item.createReader().readEntries((connectionsItems) => {
+                        for (const connectionItem of connectionsItems) {
+                            if (connectionItem.isDirectory && connectionItem.name === 'followers_and_following') {
+                                connectionItem.createReader().readEntries((followersItems) => {
+                                    for (const followersItem of followersItems) {
+                                        if (followersItem.isFile && followersItem.name === 'followers_1.html') {
+                                            followersItem.file((file) => {
+                                                loadFollowersFile(file); 
+                                            });
+                                            break;
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+        }, (error) => {
+            console.error("Error reading folder:", error);
+        });
+    }
+
+    function initDragAndDrop() {
+        const dropArea = document.getElementById('dropArea');
+
+        document.addEventListener('dragover', function (event) {
+            event.preventDefault();
+            dropArea.style.opacity = '1';
+            dropArea.style.pointerEvents = 'all';
+        });
+
+        dropArea.addEventListener('dragleave', function () {
+            dropArea.style.opacity = '0';
+            dropArea.style.pointerEvents = 'none';
+        });
+
+        dropArea.addEventListener('drop', function (event) {
+            event.preventDefault();
+            dropArea.style.opacity = '0';
+            dropArea.style.pointerEvents = 'none';
+
+            const items = event.dataTransfer.items;
+            for (const item of items) {
+                const entry = item.webkitGetAsEntry();
+                if (entry.isDirectory) {
+                    processInstagramFolder(entry);
+                }
+            }
+        });
+    }
+
+</script>
+
+</body>
+</html>
