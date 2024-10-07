@@ -1,12 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import './App.css'; // Ensure CSS is properly imported for your styling
+import './App.css'; 
 import EXIF from 'exif-js';
 
+/**
+ * Dynamically load the Google Maps script and call the initialize function
+ */
+function loadGoogleMapsScript(callback) {
+  if (typeof window.google === 'undefined') {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&v=weekly&solution_channel=GMP_CCS_streetview_v2`;
+    script.async = true;
+    script.defer = true;
+    script.onload = callback;  // Call initialize once the script is loaded
+    document.head.appendChild(script);
+  } else {
+    if (callback) {
+      callback();
+    }
+  }
+}
+
+/**
+ * Initialize Google Maps with Street View
+ */
+function initialize(latitude, longitude) {
+  const location = { lat: latitude, lng: longitude };
+  const map = new window.google.maps.Map(document.getElementById("map"), {
+    center: location,
+    zoom: 14,
+  });
+  const panorama = new window.google.maps.StreetViewPanorama(
+    document.getElementById("pano"),
+    {
+      position: location,
+      pov: {
+        heading: 34,
+        pitch: 10,
+      },
+    }
+  );
+
+  map.setStreetView(panorama);
+}
+
+/**
+ * Process folder to read images and extract GPS EXIF data
+ */
 function processFolder(folder, setImages, setCoordinates) {
   const reader = folder.createReader();
   const imageFiles = [];
 
-  // Read images and process EXIF data
   reader.readEntries(function (entries) {
     for (let entry of entries) {
       if (entry.isFile) {
@@ -25,9 +68,9 @@ function processFolder(folder, setImages, setCoordinates) {
                 const latitude = convertDMSToDD(lat, latRef);
                 const longitude = convertDMSToDD(lon, lonRef);
                 setCoordinates({ latitude, longitude });
-                console.log("latitude: " + latitude + " longitude: " + longitude);
+                console.log("Latitude: " + latitude + " Longitude: " + longitude);
               } else {
-                console.log("Coordinates not found in image.");
+                console.log("No GPS data found in image.");
               }
             });
 
@@ -67,22 +110,15 @@ function SecondPage() {
     event.preventDefault();
   };
 
+  // Trigger `initialize` function after coordinates are set and Google Maps API is loaded
   useEffect(() => {
-    console.log("GOT ELEMENT"); 
-    if (coordinates && window.google) {
-      if (!document.getElementById("street-view").getAttribute('initialized')) {
-        const panorama = new window.google.maps.StreetViewPanorama(
-          document.getElementById("street-view"), {
-            position: { lat: coordinates.latitude, lng: coordinates.longitude },
-            pov: { heading: 34, pitch: 10 },
-            zoom: 1
-          }
-        );
-        document.getElementById("street-view").setAttribute('initialized', 'true');
-      }
+    if (coordinates) {
+      // Attach the initialize function to the window object so it's globally accessible
+      window.initialize = () => initialize(coordinates.latitude, coordinates.longitude);
+      loadGoogleMapsScript(window.initialize); // Load the Google Maps script and call initialize
     }
   }, [coordinates]);
-  
+
   return (
     <div className="App-header">
       <h1 className="page_title">Memguessr</h1>
@@ -93,7 +129,7 @@ function SecondPage() {
         onDragOver={handleDragOver}
         style={{
           padding: '20px',
-          width: '300px',
+          width: '50%',
           height: '300px',
           margin: 'auto',
           textAlign: 'center',
@@ -108,15 +144,12 @@ function SecondPage() {
         [DROP MEMS]
       </div>
 
-      {/* Street View Container */}
-      <div id="street-view" style={{
-        width: '100%',
-        height: '100vh',
-        position: 'absolute',
-        top: '0',
-        left: '0',
-        zIndex: '-1',
-      }}></div>
+      {/* Google Maps and Street View Containers */}
+      <div id="interface" style={{ display: 'flex', width: '100%', height: '75vh' }}>
+        <div id="map" style={{ flex: 1}}></div>
+        <div id="pano" style={{ flex: 3 }}></div>
+      </div>
+
     </div>
   );
 }
