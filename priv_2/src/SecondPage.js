@@ -2,20 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css'; 
 import EXIF from 'exif-js';
 
-/*
-https://mapsplatform.google.com/resources/blog/how-calculate-distances-map-maps-javascript-api/
-*/
-
-/**
- * Dynamically load the Google Maps script and call the callback once loaded
- */
 function loadGoogleMapsScript(callback) {
   if (typeof window.google === 'undefined') {
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyAvvN-YaRDjh-AwygMlrh55NOCsvpXXv58&libraries=geometry&v=weekly`;
     script.async = true;
     script.defer = true;
-    script.onload = callback;  // Call initialize once the script is loaded
+    script.onload = callback; 
     document.head.appendChild(script);
   } else {
     if (callback) {
@@ -24,55 +17,43 @@ function loadGoogleMapsScript(callback) {
   }
 }
 
-
-/**
- * Initialize Google Maps with a world map for guessing
- */
 function initializeWorldMap(setGuessedCoordinates) {
   if (window.google && window.google.maps) {
     const map = new window.google.maps.Map(document.getElementById("map"), {
-      center: { lat: 20, lng: 0 }, // Center the map at the equator
-      zoom: 3.6, // Zoomed out for a world map view
+      center: { lat: 20, lng: 0 }, 
+      zoom: 3.6,
     });
 
-    window.google.maps.mapInstance = map; // Store the map instance for later use
+    window.google.maps.mapInstance = map; 
 
-    let marker = null; // Variable to store the marker, so it can be updated
+    let marker = null; 
 
-    // Add a click listener to get the user's guessed location and drop a pin
     map.addListener('click', (event) => {
       const clickedLatLng = {
         latitude: event.latLng.lat(),
         longitude: event.latLng.lng(),
       };
 
-      // Custom icon (default marker with scaling)
       const icon = {
-        url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png", // Default marker
-        scaledSize: new window.google.maps.Size(150, 150), // Scale the default marker size (width, height)
+        url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png", 
+        scaledSize: new window.google.maps.Size(150, 150),
       };
 
-      // If there's already a marker, move it; otherwise, create a new one
       if (marker) {
         marker.setPosition(event.latLng);
       } else {
         marker = new window.google.maps.Marker({
           position: event.latLng,
           map: map,
-          title: "Your Guess", // Optional title for the marker
-          icon: icon, // Use the scaled default icon
+          icon: icon, 
         });
       }
 
-      setGuessedCoordinates(clickedLatLng); // Update the guessed coordinates
+      setGuessedCoordinates(clickedLatLng); 
     });
   }
 }
 
-
-/**
- * Initialize the Street View Panorama based on actual coordinates
- */
 function initializeStreetView(latitude, longitude) {
   if (window.google && window.google.maps) {
     const location = { lat: latitude, lng: longitude };
@@ -90,9 +71,6 @@ function initializeStreetView(latitude, longitude) {
   }
 }
 
-/**
- * Process folder to read images and extract GPS EXIF data
- */
 function processFolder(folder, setImages, setCoordinates) {
   const reader = folder.createReader();
   const imageFiles = [];
@@ -105,7 +83,6 @@ function processFolder(folder, setImages, setCoordinates) {
             const imageUrl = URL.createObjectURL(file);
             imageFiles.push(imageUrl);
 
-            // Extract EXIF data, including coordinates
             EXIF.getData(file, function () {
               const lat = EXIF.getTag(this, 'GPSLatitude');
               const lon = EXIF.getTag(this, 'GPSLongitude');
@@ -129,7 +106,6 @@ function processFolder(folder, setImages, setCoordinates) {
   });
 }
 
-// Convert DMS (Degrees, Minutes, Seconds) to Decimal Degrees
 function convertDMSToDD(dms, ref) {
   const degrees = dms[0] + dms[1] / 60 + dms[2] / 3600;
   return (ref === 'S' || ref === 'W') ? -degrees : degrees;
@@ -137,16 +113,15 @@ function convertDMSToDD(dms, ref) {
 
 
 function SecondPage() {
-  const [images, setImages] = useState([]);
-  const canvasRef = useRef(null); // Reference to the canvas
-  const [coordinates, setCoordinates] = useState(null); // Actual coordinates from EXIF
-  const [guessedCoordinates, setGuessedCoordinates] = useState(null); // User's guessed coordinates
-  const [distance, setDistance] = useState(null); // Distance between guess and actual location
+  const [images, setImages] = useState([]); 
+  const [imageIndex, setImageIndex] = useState(0);
+  const [coordinates, setCoordinates] = useState(null);
+  const [guessedCoordinates, setGuessedCoordinates] = useState(null); 
+  const [distance, setDistance] = useState(null); 
 
   const handleDrop = (event) => {
-    event.preventDefault(); // Prevent default behavior (open as link for some elements)
-    event.stopPropagation(); // Stop the event from propagating further
-    
+    event.preventDefault();
+    event.stopPropagation(); 
     console.log("Drop event triggered");
   
     const items = event.dataTransfer.items;
@@ -162,24 +137,22 @@ function SecondPage() {
       }
     }
   };
-  
+
   const handleDragOver = (event) => {
-    event.preventDefault(); // Prevent default behavior during drag over
-    event.stopPropagation(); // Stop propagation
+    event.preventDefault(); 
+    event.stopPropagation(); 
     console.log("Drag over event triggered");
   };
   
-  // Inside the `submitGuess` function
   const submitGuess = () => {
     if (coordinates && guessedCoordinates) {
       const actualLatLng = new window.google.maps.LatLng(coordinates.latitude, coordinates.longitude);
       const guessedLatLng = new window.google.maps.LatLng(guessedCoordinates.latitude, guessedCoordinates.longitude);
       
-      // Use Google Maps Geometry library to calculate distance
+    
       const distance = window.google.maps.geometry.spherical.computeDistanceBetween(actualLatLng, guessedLatLng) / 1000; // Convert meters to kilometers
       setDistance(distance);
   
-      // Add the star icon at the actual location
       new window.google.maps.Marker({
         position: actualLatLng,
         map: window.google.maps.mapInstance,
@@ -190,7 +163,6 @@ function SecondPage() {
         title: "Actual Location",
       });
   
-      // Draw a line connecting the actual and guessed points
       const line = new window.google.maps.Polyline({
         path: [actualLatLng, guessedLatLng],
         geodesic: true,
@@ -199,33 +171,40 @@ function SecondPage() {
         strokeWeight: 10,
       });
   
-      line.setMap(window.google.maps.mapInstance); // Assuming you have a reference to the map instance
+      line.setMap(window.google.maps.mapInstance); 
   
-      // Expand the map to take the whole interface space
-      document.getElementById('map').style.flex = '1 1 100%';  // Make map take full width
-      document.getElementById('pano').style.display = 'none';  // Hide panorama section
+
+      document.getElementById('map').style.flex = '1 1 100%';  
+      document.getElementById('pano').style.display = 'none'; 
   
       console.log(`Distance between guess and actual location: ${distance} km`);
     }
   };
-  
 
-  
+ 
+  const nextImage = () => {
+    if (imageIndex < images.length - 1) {
+      setImageIndex(imageIndex + 1);
+      setCoordinates(null);
+      setGuessedCoordinates(null);
+      setDistance(null);
+      console.log("Next image loaded.");
+    } else {
+      console.log("No more images in the folder.");
+    }
+  };
 
-  // Initialize world map after the component mounts
+
   useEffect(() => {
-    // Load Google Maps script and initialize the world map after it's loaded
     loadGoogleMapsScript(() => {
       if (typeof initializeWorldMap === 'function') {
-        initializeWorldMap(setGuessedCoordinates); // Call the initialize function after the script loads
+        initializeWorldMap(setGuessedCoordinates); 
       } else {
         console.error("initializeWorldMap is not defined");
       }
     });
   }, []);
-  
 
-  // Initialize Street View Panorama when actual coordinates are set
   useEffect(() => {
     if (coordinates) {
       initializeStreetView(coordinates.latitude, coordinates.longitude);
@@ -255,52 +234,69 @@ function SecondPage() {
         }}
       >
         [DROP MEMS]
-</div>
+      </div>
 
-  <div id="interface" style={{ display: 'flex', width: '100%', height: '75vh', position: 'relative' }}>
-  <button
-    onClick={submitGuess}
-    style={{
-      height: '200px',
-      position: 'absolute',
-      left: '20px',
-      fontSize: '100px',
-      top: '100px',
-      fontFamily: 'Bungee Tint',
-      borderRadius: '10px',
-      color: 'white',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      zIndex: 999,
-    }}
-  >
-    GUESS
-  </button>
-  
-  <div id="map" style={{ flex: 1 }}></div>
-  <div id="pano" style={{ flex: 3 }}></div>
+      <div id="interface" style={{ display: 'flex', width: '100%', height: '75vh' }}>
+        <button
+          onClick={submitGuess}
+          style={{
+            height: '200px',
+            position: 'absolute',
+            left: '20px',
+            fontSize: '100px',
+            top: '1200px',
+            fontFamily: 'Bungee Tint',
+            borderRadius: '10px',
+            color: 'white',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 999,
+          }}
+        >
+          GUESS
+        </button>
+        <div id="map" style={{ flex: 1 }}></div>
+        <div id="pano" style={{ flex: 3 }}></div>
+      </div>
 
-  {distance !== null && (
-    <div
-      style={{
-        position: 'absolute',
-        top: '40%',  // Adjust the vertical positioning within the visible area
-        left: '50%',
-        transform: 'translateX(-50%)',  // Center horizontally
-        zIndex: 999,
-        color: 'red',
-        fontSize: '200px',
-        backgroundColor: 'rgba(0, 0, 0, 0.2)',
-        padding: '10px 20px',
-        borderRadius: '10px',
-        fontFamily: 'Bungee Tint',
-      }}
-    >
-      {distance.toFixed(2)} KM FROM MEMTARGET
-    </div>
-  )}
-</div>
+      {distance !== null && (
+        <div>
+          <div
+            style={{
+              position: 'absolute',
+              top: '40%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 999,
+              color: 'red',
+              fontSize: '200px',
+              backgroundColor: 'rgba(0, 0, 0, 0.2)',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              fontFamily: 'Bungee Tint',
+            }}
+          >
+            {distance.toFixed(2)} KM FROM MEMTARGET
+          </div>
 
-
+          <button
+            onClick={nextImage}
+            style={{
+              height: '100px',
+              position: 'absolute',
+              left: '20px',
+              fontSize: '50px',
+              top: '1400px',
+              fontFamily: 'Bungee Tint',
+              borderRadius: '10px',
+              color: 'white',
+              backgroundColor: 'rgba(0, 0, 255, 0.5)',
+              zIndex: 999,
+            }}
+          >
+            NEXT
+          </button>
+        </div>
+      )}
     </div>
   );
 }
